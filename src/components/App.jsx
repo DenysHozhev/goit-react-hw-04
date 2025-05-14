@@ -1,13 +1,17 @@
-import SearchBar from "./searchBar/SearchBar";
-import "./App.css";
+import { useState, useEffect } from "react";
+import axios from "axios";
 import { Toaster } from "react-hot-toast";
+
+import SearchBar from "./searchBar/SearchBar";
 import ImageGallery from "./imageGallery/ImageGallery";
 import Loader from "./loader/Loader";
-import { useState } from "react";
 import ErrorMessage from "./errorMessage/ErrorMessage";
 import LoadMoreBtn from "./loadMoreBtn/LoadMoreBtn";
-import axios from "axios";
 import ImageModal from "./imageModal/ImageModal";
+
+import "./App.css";
+
+axios.defaults.baseURL = "https://api.unsplash.com/";
 
 function App() {
   const [loading, setLoading] = useState(false);
@@ -20,66 +24,57 @@ function App() {
   const [modalIsOpen, setIsOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
 
-  const onSubmit = (newQuery) => {
-    console.log(`Search: ${newQuery}`);
+  useEffect(() => {
+    if (!query) return;
+
     setLoading(true);
     setError(false);
-    setLoadBtn(false);
-    responseData(newQuery)
+
+    responseData(query, { page })
       .then((data) => {
-        setImages(data.results);
-        setLoadBtn(true);
-        setPage(1);
-        setQuery(newQuery);
+        setImages((prevImages) =>
+          page === 1 ? data.results : [...prevImages, ...data.results]
+        );
         setTotalPages(data.total_pages);
+        setLoadBtn(page < data.total_pages);
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  };
-
-  axios.defaults.baseURL = "https://api.unsplash.com/";
+  }, [query, page]);
 
   function responseData(query, additionalParams = {}) {
-    const reqestParams = {
+    const requestParams = {
       client_id: "LZr_vOm1lIn6mvyhgEe6tt3KkdPj308WnErdw7HcsBE",
       query,
-
       ...additionalParams,
     };
+
     return axios
-      .get("search/photos", {
-        params: reqestParams,
-      })
-      .then((response) => {
-        return response.data;
-      })
-      .catch((error) => {
-        throw error;
-      });
+      .get("search/photos", { params: requestParams })
+      .then((response) => response.data);
   }
 
-  const loadMore = () => {
-    const nextPage = page + 1;
-    responseData(query, { page: nextPage })
-      .then((data) => {
-        setImages((prevImages) => [...prevImages, ...data.results]);
-        setLoadBtn(true);
-        setPage(nextPage < totalPages);
-      })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
+  const onSubmit = (newQuery) => {
+    if (newQuery === query) return;
+    setImages([]);
+    setPage(1);
+    setQuery(newQuery);
   };
 
-  let subtitle;
+  const loadMore = () => {
+    if (page < totalPages) {
+      setPage((prevPage) => prevPage + 1);
+    }
+  };
 
-  function openModal(image) {
-    setIsOpen(true);
+  const openModal = (image) => {
     setSelectedImage(image);
-  }
+    setIsOpen(true);
+  };
 
-  function closeModal() {
+  const closeModal = () => {
     setIsOpen(false);
-  }
+  };
 
   return (
     <div>
@@ -88,7 +83,7 @@ function App() {
       <ImageGallery images={images} onImageClick={openModal} />
       {loading && <Loader />}
       {error && <ErrorMessage />}
-      {loadBtn && <LoadMoreBtn onClick={loadMore} />}
+      {loadBtn && !loading && <LoadMoreBtn onClick={loadMore} />}
       <ImageModal
         isOpen={modalIsOpen}
         onRequestClose={closeModal}
